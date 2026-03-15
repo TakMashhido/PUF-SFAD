@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PUF-SFAD Secure Firmware Update</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;600;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #030712;
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #0ea5e9;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --border-color: rgba(51, 65, 85, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            background-image:
+                radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+            color: var(--text-primary);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: rgba(3, 7, 18, 0.6);
+            backdrop-filter: blur(12px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 20;
+            flex-shrink: 0;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr 420px;
+            flex: 1;
+            overflow: hidden;
+            /* Prevent body scroll */
+            height: 100%;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            gap: 1.5rem;
+            z-index: 10;
+            overflow: hidden;
+            min-height: 0;
+            /* CRITICAL for grid child scrolling */
+        }
+
+        .device-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+            flex: 1;
+            /* Take remaining space */
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-color), #2563eb);
+            color: white;
+            border: none;
+            padding: 0.875rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(14, 165, 233, 0.4);
+        }
+
+        .device-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .device-card:hover {
+            border-color: var(--accent-color);
+            background: rgba(14, 165, 233, 0.05);
+        }
+
+        .device-card.updating {
+            border-color: var(--warning-color);
+            background: rgba(245, 158, 11, 0.05);
+        }
+
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .device-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .device-status {
+            font-size: 0.7rem;
+            color: var(--success-color);
+            background: rgba(16, 185, 129, 0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 99px;
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.75rem;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s;
+        }
+
+        .btn-sm:hover {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+
+        /* Visualization Area */
+        .visualization-area {
+            position: relative;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+            min-height: 0;
+            /* CRITICAL for grid child scrolling */
+        }
+
+        .server-node {
+            width: 140px;
+            height: 140px;
+            background: radial-gradient(circle at 30% 30%, #334155, #0f172a);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            box-shadow: 0 0 60px rgba(0, 0, 0, 0.6);
+            z-index: 5;
+            /* Fixed position relative to vis area */
+            margin-top: 2rem;
+            flex-shrink: 0;
+        }
+
+        .server-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .server-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* Device Container - Scrollable Grid */
+        .device-node-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+            width: 100%;
+            max-width: 800px;
+            overflow-y: auto;
+            /* Scrollable */
+            flex: 1;
+            /* Take remaining height */
+            align-content: start;
+            /* Pack items at top */
+            margin-top: 2rem;
+
+            /* Custom Scrollbar */
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) transparent;
+        }
+
+        .device-node {
+            width: 90px;
+            height: 90px;
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+            margin: 0 auto;
+            /* Center in grid cell */
+        }
+
+        .device-node:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-color);
+        }
+
+        .device-node-icon {
+            font-size: 2rem;
+        }
+
+        .device-node-label {
+            font-size: 0.7rem;
+            font-family: 'JetBrains Mono', monospace;
+            margin-top: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        /* Packet Animation Layer */
+        #animation-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .packet {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        /* Telemetry Panel */
+        .telemetry-panel {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem;
+            z-index: 10;
+            overflow: hidden;
+            min-height: 0;
+            /* CRITICAL for grid child scrolling */
+        }
+
+        .stats-bar {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.75rem;
+            border-radius: 8px;
+        }
+
+        .stat-val {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-lbl {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .telemetry-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-shrink: 0;
+        }
+
+        .telemetry-content {
+            flex: 1;
+            /* Take remaining height */
+            overflow-y: auto;
+            /* Scrollable */
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            padding-right: 0.5rem;
+
+            /* Custom Scrollbar */
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) transparent;
+        }
+
+        .telemetry-block {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 3px solid transparent;
+        }
+
+        .telemetry-block.type-info {
+            border-left-color: var(--accent-color);
+        }
+
+        .telemetry-block.type-success {
+            border-left-color: var(--success-color);
+        }
+
+        .telemetry-block.type-error {
+            border-left-color: var(--danger-color);
+        }
+
+        .t-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .t-label {
+            font-weight: 700;
+        }
+
+        .t-time {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+        }
+
+        .t-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.35rem;
+            padding-bottom: 0.35rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .t-row:last-child {
+            border-bottom: none;
+        }
+
+        .t-key {
+            color: var(--accent-color);
+        }
+
+        .t-val {
+            color: #cbd5e1;
+            word-break: break-all;
+            text-align: right;
+            max-width: 65%;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="animation-layer"></div>
+
+    <header>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div
+                style="width: 32px; height: 32px; background: linear-gradient(135deg, #38bdf8, #2563eb); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white;">
+                P</div>
+            <h1>PUF-SFAD <span
+                    style="font-weight: 400; color: var(--text-secondary); font-size: 1rem; margin-left: 0.5rem;">Secure
+                    Firmware Update</span></h1>
+        </div>
+        <div
+            style="font-size: 0.8rem; color: var(--success-color); background: rgba(16, 185, 129, 0.1); padding: 0.4rem 0.8rem; border-radius: 99px; border: 1px solid rgba(16, 185, 129, 0.2);">
+            ● System Secure
+        </div>
+    </header>
+
+    <div class="main-layout">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div
+                style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); font-weight: 700;">
+                Network Control</div>
+            <button class="btn" onclick="createDevice()">
+                <span style="font-size: 1.2rem;">+</span> Create New Device
+            </button>
+
+            <div
+                style="margin-top: 1rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); font-weight: 700;">
+                Connected Devices</div>
+            <div class="device-list" id="device-list">
+                <!-- Devices injected here -->
+            </div>
+        </div>
+
+        <!-- Visualization -->
+        <div class="visualization-area" id="vis-area">
+            <div class="server-node">
+                <div class="server-icon">🏢</div>
+                <div class="server-label">Server</div>
+            </div>
+
+            <div class="device-node-container" id="node-container">
+                <!-- Visual nodes injected here -->
+            </div>
+        </div>
+
+        <!-- Telemetry -->
+        <div class="telemetry-panel">
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <span class="stat-val" id="s-req">0</span>
+                    <span class="stat-lbl">Requests</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-val" id="s-suc" style="color: var(--success-color);">0</span>
+                    <span class="stat-lbl">Success</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-val" id="s-act">0</span>
+                    <span class="stat-lbl">Active</span>
+                </div>
+            </div>
+
+            <div class="telemetry-header">
+                <span
+                    style="font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); font-size: 0.75rem;">Live
+                    Telemetry</span>
+                <span style="font-size: 0.65rem; color: var(--text-secondary);">Real-time</span>
+            </div>
+            <div class="telemetry-content" id="telemetry-log">
+                <div style="text-align: center; color: var(--text-secondary); margin-top: 3rem; opacity: 0.5;">
+                    Waiting for network activity...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let devices = new Set();
+        const COLORS = { request: '#38bdf8', response: '#fbbf24', enroll: '#34d399', danger: '#ef4444' };
+
+        function createDevice() {
+            fetch('/api/control/create_device', { method: 'POST' });
+        }
+
+        function triggerUpdate(id) {
+            const card = document.getElementById(`card-${id}`);
+            if (card) card.classList.add('updating');
+
+            animatePacket(id, 'up', COLORS.request, () => {
+                fetch('/api/control/trigger_update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ device_id: id })
+                });
+            });
+        }
+
+        function animatePacket(deviceId, direction, color, callback) {
+            const server = document.querySelector('.server-node');
+            const device = document.getElementById(`node-${deviceId}`);
+
+            if (!device) { if (callback) callback(); return; }
+
+            const packet = document.createElement('div');
+            packet.className = 'packet';
+            packet.style.backgroundColor = color;
+            packet.style.color = color;
+            document.getElementById('animation-layer').appendChild(packet);
+
+            const start = direction === 'up' ? device : server;
+            const end = direction === 'up' ? server : device;
+
+            // Use viewport coordinates
+            const sRect = start.getBoundingClientRect();
+            const eRect = end.getBoundingClientRect();
+
+            const startX = sRect.left + sRect.width / 2 - 7;
+            const startY = sRect.top + sRect.height / 2 - 7;
+            const endX = eRect.left + eRect.width / 2 - 7;
+            const endY = eRect.top + eRect.height / 2 - 7;
+
+            packet.style.left = `${startX}px`;
+            packet.style.top = `${startY}px`;
+
+            const anim = packet.animate([
+                { transform: `translate(0, 0) scale(0.5)`, opacity: 0 },
+                { transform: `translate(0, 0) scale(1)`, opacity: 1, offset: 0.1 },
+                { transform: `translate(${endX - startX}px, ${endY - startY}px) scale(1)`, opacity: 1, offset: 0.9 },
+                { transform: `translate(${endX - startX}px, ${endY - startY}px) scale(0.5)`, opacity: 0 }
+            ], {
+                duration: 1000,
+                easing: 'cubic-bezier(0.4, 0, 0.2, 1)'
+            });
+
+            anim.onfinish = () => {
+                packet.remove();
+                if (callback) callback();
+            };
+        }
+
+        function addTelemetry(data) {
+            const container = document.getElementById('telemetry-log');
+            if (container.children[0]?.innerText.includes("Waiting")) container.innerHTML = '';
+
+            const block = document.createElement('div');
+            let typeClass = 'type-info';
+            if (data.status === 'success') typeClass = 'type-success';
+            if (data.status === 'error') typeClass = 'type-error';
+
+            block.className = `telemetry-block ${typeClass}`;
+
+            const timeStr = new Date(data.timestamp * 1000).toLocaleTimeString();
+            let labelColor = COLORS.request;
+            if (data.status === 'success') labelColor = COLORS.enroll;
+            if (data.status === 'error') labelColor = COLORS.danger;
+
+            let content = `
+                <div class="t-header">
+                    <span class="t-label" style="color: ${labelColor}">${data.device_type} [${data.device_id ? data.device_id.substring(0, 8) : 'System'}]</span>
+                    <span class="t-time">${timeStr}</span>
+                </div>
+            `;
+
+            if (data.telemetry) {
+                for (const [key, val] of Object.entries(data.telemetry)) {
+                    content += `
+                        <div class="t-row">
+                            <span class="t-key">${key}</span>
+                            <span class="t-val">${val.substring(0, 16)}${val.length > 16 ? '...' : ''}</span>
+                        </div>
+                    `;
+                }
+            } else {
+                content += `<div class="t-row" style="border:none;"><span class="t-val" style="text-align:left; max-width:100%; color: var(--text-secondary);">${data.message}</span></div>`;
+            }
+
+            block.innerHTML = content;
+            container.prepend(block);
+        }
+
+        function updateUI(events, stats) {
+            document.getElementById('s-req').textContent = stats.total_requests;
+            document.getElementById('s-suc').textContent = stats.successful_updates;
+            document.getElementById('s-act').textContent = stats.active_devices_count;
+
+            events.forEach(e => {
+                if (e.device_id && !devices.has(e.device_id)) {
+                    devices.add(e.device_id);
+                    renderDevice(e.device_id);
+                    setTimeout(() => animatePacket(e.device_id, 'up', COLORS.enroll), 100);
+                }
+                if (e.message.includes("Update generated")) {
+                    animatePacket(e.device_id, 'down', COLORS.response);
+                }
+                if (e.status === 'success' && e.message.includes("Update Installed")) {
+                    const card = document.getElementById(`card-${e.device_id}`);
+                    if (card) card.classList.remove('updating');
+                }
+            });
+        }
+
+        let lastEventTime = 0;
+
+        function renderDevice(id) {
+            // Sidebar
+            const list = document.getElementById('device-list');
+            if (document.getElementById(`card-${id}`)) return;
+
+            const card = document.createElement('div');
+            card.className = 'device-card';
+            card.id = `card-${id}`;
+            card.innerHTML = `
+                <div class="device-header">
+                    <span class="device-id">${id}</span>
+                    <span class="device-status">Active</span>
+                </div>
+                <button class="btn-sm" onclick="triggerUpdate('${id}')">Update Firmware</button>
+            `;
+            list.appendChild(card);
+
+            // Visual Node
+            const container = document.getElementById('node-container');
+            const node = document.createElement('div');
+            node.className = 'device-node';
+            node.id = `node-${id}`;
+            node.innerHTML = `
+                <div class="device-node-icon">📱</div>
+                <div class="device-node-label">${id.substring(0, 4)}</div>
+            `;
+            container.appendChild(node);
+        }
+
+        function poll() {
+            fetch('/api/events')
+                .then(r => r.json())
+                .then(events => {
+                    const newEvents = events.filter(e => e.timestamp > lastEventTime);
+                    if (newEvents.length > 0) {
+                        lastEventTime = newEvents[newEvents.length - 1].timestamp;
+                        newEvents.forEach(addTelemetry);
+                    }
+                    fetch('/api/stats').then(r => r.json()).then(stats => updateUI(events, stats));
+                });
+        }
+
+        setInterval(poll, 1000);
+    </script>
+</body>
+
+</html>

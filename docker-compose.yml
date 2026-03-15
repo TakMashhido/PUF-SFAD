@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  server:
+    build: ./code
+    container_name: puf_server
+    command: python src/server_app.py
+    ports:
+      - "5000:5000"
+    networks:
+      - puf_net
+
+  legitimate_sim:
+    build: ./code
+    container_name: puf_legitimate_sim
+    command: python src/legitimate_simulator.py
+    depends_on:
+      - server
+    networks:
+      - puf_net
+
+networks:
+  puf_net:
+    driver: bridge

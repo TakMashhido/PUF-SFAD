@@ -1,0 +1,100 @@
+theory PUF_SFAD
+begin
+
+// -----------------------------------------------------------------------------
+// Function signature and definition of the equational theory E
+// -----------------------------------------------------------------------------
+
+functions: fst/1, fuzzy_dec/2, fuzzy_enc/2, h/1, pair/2, sdec/2, senc/2, snd/1
+
+equations:
+    fst(<x.1, x.2>) = x.1,
+    fuzzy_dec(fuzzy_enc(secret, puf_response), puf_response) = secret,
+    sdec(senc(x.1, x.2), x.2) = x.1,
+    snd(<x.1, x.2>) = x.2
+
+// -----------------------------------------------------------------------------
+// Restrictions
+// -----------------------------------------------------------------------------
+
+restriction Equality:
+  "∀ x y #i. (Eq( x, y ) @ #i) ⇒ (x = y)"
+
+// -----------------------------------------------------------------------------
+// Protocol Rules
+// -----------------------------------------------------------------------------
+
+rule (modulo E) Enroll_Device:
+    [ Fr( ~phy_silicon ), Fr( ~k_root ), Fr( ~id ) ]
+  --[ Enrolled( ~id ), Device_Key_Bound( ~id, ~k_root ) ]->
+    [
+      !Server_DB( ~id, fuzzy_enc(~k_root, ~phy_silicon), ~k_root ),
+      !Device_Silicon( ~id, ~phy_silicon )
+    ]
+
+rule (modulo E) Server_Distribute_Firmware:
+    [ !Server_DB( id, helper_data, k_root ), Fr( ~n_sess ), Fr( ~fw_payload ) ]
+  --[ Server_Sent_FW( id, ~fw_payload ), Secret_FW_Generated( ~fw_payload ) ]->
+    [
+      Out( <'PUF_HEADER', helper_data, ~n_sess,
+            senc(<'TAG_VALID', ~fw_payload>, h(<~n_sess, k_root>))>
+      )
+    ]
+
+// FIX: Using 'let' to bind variables before using them in action facts
+rule (modulo E) Device_Receive_And_Install:
+    let
+        // 1. Reconstruct the session key using the local PUF response
+        derived_key = h(<n_sess_received, fuzzy_dec(P_received, puf_response)>)
+
+        // 2. Attempt to decrypt the blob
+        decrypted_msg = sdec(blob_received, derived_key)
+
+        // 3. Extract components using projection functions defined in equations
+        tag_check = fst(decrypted_msg)
+        installed_fw = snd(decrypted_msg)
+    in
+    [
+        !Device_Silicon( id, puf_response ),
+        In( <'PUF_HEADER', P_received, n_sess_received, blob_received> )
+    ]
+  --[
+        // 4. Verify the tag matches 'TAG_VALID'
+        Eq( tag_check, 'TAG_VALID' ),
+
+        Device_Installed_FW( id, installed_fw ),
+        Device_Auth_Server( id, derived_key )
+    ]->
+    [ ]
+
+// -----------------------------------------------------------------------------
+// Lemmas
+// -----------------------------------------------------------------------------
+
+lemma protocol_executable:
+    exists-trace
+    "∃ id fw #i. Device_Installed_FW( id, fw ) @ #i"
+
+lemma G1_Firmware_Confidentiality:
+    all-traces
+    "∀ fw #i. (Secret_FW_Generated( fw ) @ #i) ⇒ (¬(∃ #j. K( fw ) @ #j))"
+
+lemma G2_Device_Firmware_Binding:
+    all-traces
+    "∀ id fw #i.
+    (Device_Installed_FW( id, fw ) @ #i) ⇒
+    (∃ #j. (Server_Sent_FW( id, fw ) @ #j) ∧ (#j < #i))"
+
+lemma G3_Origin_Authentication:
+    all-traces
+    "∀ id fw #i.
+    (Device_Installed_FW( id, fw ) @ #i) ⇒
+    (∃ #j. Server_Sent_FW( id, fw ) @ #j)"
+
+lemma G5_Unclonability_enforced:
+    all-traces
+    "∀ id fw #i.
+    (Device_Installed_FW( id, fw ) @ #i) ⇒
+    (∃ k_root #k. Device_Key_Bound( id, k_root ) @ #k)"
+
+end
