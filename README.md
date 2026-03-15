@@ -1,4 +1,4 @@
-# PUF SFAD Simulation
+# PUF-SFAD Simulation
 
 This repository contains the simulation code and formal proofs for PUF-SFAD, a Physical Unclonable Function (PUF) based Secure Firmware Update scheme.
 
