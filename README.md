@@ -1,6 +1,6 @@
 # PUF SFAD Simulation
 
-This repository contains the simulation code and formal proofs for a Physical Unclonable Function (PUF) based Secure Firmware Update scheme. 
+This repository contains the simulation code and formal proofs for PUF-SFAD, a Physical Unclonable Function (PUF) based Secure Firmware Update scheme.
 
 ## Project Structure
 
@@ -24,7 +24,8 @@ The project is containerized using Docker, allowing you to easily run the server
 ### Start the Simulation
 1. Clone the repository and navigate to the project directory:
    ```bash
-   cd "PUF SFAD Simulation Code"
+   git clone https://github.com/TakMashhido/PUF-SFAD.git
+   cd PUF-SFAD
    ```
 2. Start the Docker containers:
    ```bash
